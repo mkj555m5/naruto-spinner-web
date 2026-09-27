@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍥 NARUTO MULTI-SPINNER — WEB</title>
+<meta name="description" content="NARUTO Multi-Event Spinner — لوحة تحكم ويب — OB55 Edition">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍥</text></svg>">
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<header class="site-header">
+  <div class="header-glow"></div>
+  <div class="container header-inner">
+    <div class="brand">
+      <span class="shuriken" aria-hidden="true">🍥</span>
+      <div>
+        <h1 class="brand-title">NARUTO <span class="accent">MULTI-SPINNER</span></h1>
+        <p class="brand-sub">OB55 EDITION · 5 أحداث · لوحة ويب · Railway Ready</p>
+      </div>
+    </div>
+    <div class="header-badges">
+      <span class="badge badge-gold">👑 KAWSAR | x64</span>
+      <a class="badge badge-ghost" href="https://t.me/kawsar449x" target="_blank" rel="noopener">📱 @kawsar449x</a>
+      <span id="serverStatus" class="badge badge-ok" role="status">● متصل</span>
+    </div>
+  </div>
+</header>
+
+<main class="container main-grid">
+
+  <!-- ══════════ STEP 1: ACCOUNTS ══════════ -->
+  <section class="card span-full" aria-labelledby="step1-title">
+    <div class="card-head">
+      <span class="step-num">1</span>
+      <h2 id="step1-title">حسابات اللعبة</h2>
+      <span id="accCount" class="count-pill" aria-live="polite">0 حساب</span>
+    </div>
+    <p class="hint">الصق الحسابات هنا (JSON مثل <code dir="ltr">[{"uid":"...","password":"..."}]</code>) أو صيغة Blocks النصية، أو ارفع ملف:</p>
+    <div class="accounts-actions">
+      <label class="btn btn-ghost btn-sm" for="fileInput">
+        📂 رفع ملف (JSON / TXT)
+        <input id="fileInput" type="file" accept=".json,.txt" hidden>
+      </label>
+      <button id="parseBtn" class="btn btn-ghost btn-sm" type="button">🔍 فحص وتحليل</button>
+      <button id="clearBtn" class="btn btn-ghost btn-sm" type="button">🗑️ مسح</button>
+    </div>
+    <textarea id="accountsText" dir="ltr" rows="7" spellcheck="false"
+      placeholder='[{"uid":"123456789","password":"xxxx"},...]
+أو صيغة:
+UID: 123456789
+PASSWORD: xxxx'></textarea>
+    <p id="parseMsg" class="parse-msg" role="status"></p>
+  </section>
+
+  <!-- ══════════ STEP 2: EVENT ══════════ -->
+  <section class="card span-full" aria-labelledby="step2-title">
+    <div class="card-head">
+      <span class="step-num">2</span>
+      <h2 id="step2-title">اختر حدث السحب</h2>
+    </div>
+    <div id="eventGrid" class="event-grid" role="radiogroup" aria-label="اختيار الحدث"></div>
+
+    <div id="customWrap" class="custom-wrap" hidden>
+      <label for="customHex">Hex Payload مخصص:</label>
+      <input id="customHex" dir="ltr" class="input mono" placeholder="0821120181..." autocomplete="off">
+    </div>
+  </section>
+
+  <!-- ══════════ STEP 3: SETTINGS + RUN ══════════ -->
+  <section class="card" aria-labelledby="step3-title">
+    <div class="card-head">
+      <span class="step-num">3</span>
+      <h2 id="step3-title">الإعدادات</h2>
+    </div>
+    <div class="settings-grid">
+      <div class="field">
+        <label for="concurrency">Concurrency (تزامن)</label>
+        <input id="concurrency" class="input" type="number" min="1" max="50" value="5">
+      </div>
+      <div class="field">
+        <label for="batchSize">Batch Size (حجم الدفعة)</label>
+        <input id="batchSize" class="input" type="number" min="1" max="500" value="50">
+      </div>
+      <div class="field">
+        <label for="loginRetry">Login Retry</label>
+        <input id="loginRetry" class="input" type="number" min="1" max="10" value="3">
+      </div>
+      <div class="field">
+        <label for="startFrom">ابدأ من الحساب رقم</label>
+        <input id="startFrom" class="input" type="number" min="1" value="1">
+      </div>
+    </div>
+    <div class="run-row">
+      <button id="startBtn" class="btn btn-primary" type="button">🚀 ابدأ السحب</button>
+      <button id="stopBtn" class="btn btn-danger" type="button" disabled>⏹ إيقاف</button>
+      <a id="downloadBtn" class="btn btn-ghost" href="/api/results" title="تحميل النتائج">📥 تحميل النتائج</a>
+    </div>
+    <p id="startMsg" class="parse-msg" role="alert"></p>
+  </section>
+
+  <!-- ══════════ LIVE STATS ══════════ -->
+  <section class="card" aria-labelledby="stats-title">
+    <div class="card-head">
+      <span class="live-dot" id="liveDot" aria-hidden="true"></span>
+      <h2 id="stats-title">الإحصائيات الحية</h2>
+    </div>
+    <div class="stats-grid">
+      <div class="stat stat-vrare">
+        <span class="stat-icon">💎</span>
+        <span class="stat-num" id="statVrare">0</span>
+        <span class="stat-label">VERY RARE</span>
+      </div>
+      <div class="stat stat-rare">
+        <span class="stat-icon">⭐</span>
+        <span class="stat-num" id="statRare">0</span>
+        <span class="stat-label">RARE</span>
+      </div>
+      <div class="stat stat-normal">
+        <span class="stat-icon">📦</span>
+        <span class="stat-num" id="statNormal">0</span>
+        <span class="stat-label">NORMAL</span>
+      </div>
+      <div class="stat stat-total">
+        <span class="stat-icon">🎯</span>
+        <span class="stat-num" id="statTotal">0</span>
+        <span class="stat-label">إجمالي العناصر</span>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-info">
+        <span>الحسابات: <b id="accDone">0</b> / <b id="accTotal">0</b></span>
+        <span id="batchLabel" class="dim">—</span>
+      </div>
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-meta dim">
+        <span id="eventLabel">الحدث: —</span>
+        <span id="tokenLabel">Tokens: 0</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ HITS ══════════ -->
+  <section class="card span-full" aria-labelledby="hits-title">
+    <div class="card-head">
+      <h2 id="hits-title">🏆 الجوائز النادرة (Hits)</h2>
+      <span id="hitsCount" class="count-pill">0</span>
+    </div>
+    <div id="hitsList" class="hits-list" dir="ltr">
+      <p class="dim empty-hits">لا توجد جوائز بعد — ابدأ السحب وستظهر هنا فوراً ✨</p>
+    </div>
+  </section>
+
+  <!-- ══════════ TERMINAL LOG ══════════ -->
+  <section class="card span-full" aria-labelledby="log-title">
+    <div class="card-head">
+      <h2 id="log-title">🖥️ سجل العمليات المباشر</h2>
+      <div class="log-tools">
+        <label class="chk"><input type="checkbox" id="autoScroll" checked> تمرير تلقائي</label>
+        <button id="clearLogBtn" class="btn btn-ghost btn-sm" type="button">مسح السجل</button>
+      </div>
+    </div>
+    <div id="terminal" class="terminal" dir="ltr" aria-live="polite" aria-label="سجل العمليات">
+      <p class="dim">// الناروتو سبنر جاهز — في انتظار أوامرك 🍥</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p>Made with ❤️ by <b>KAWSAR | x64</b> · Telegram: <a href="https://t.me/kawsar449x" target="_blank" rel="noopener">@kawsar449x</a></p>
+    <p class="dim">Web Edition — FastAPI · Railway Ready · OB55</p>
+  </div>
+</footer>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

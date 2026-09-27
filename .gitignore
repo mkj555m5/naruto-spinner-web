@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.log
+*.txt
+!requirements.txt
+.env
+.venv/
+venv/
+db/
+NARUTO_*.json
+NARUTO_*_summary.txt
+.DS_Store

@@ -5,6 +5,7 @@ Credit: KAWSAR | x64 — Telegram: @kawsar449x
 
 All crypto / protobuf / networking logic preserved exactly as the original.
 """
+import os
 import re
 import time
 import json
@@ -27,6 +28,32 @@ RELEASE_VER  = "OB55"
 UNITY_VER    = "2018.4.12f1"
 
 EXTERNAL_API_URL = "https://ff-jwt-gen-api.lovable.app//api/public/token"
+
+# ── PROXY / WARP CONFIG ──────────────────────────────────────
+WARP_SOCKS = os.environ.get("WARP_SOCKS", "socks5://127.0.0.1:25344")
+
+
+def get_proxy_url() -> str:
+    """Resolve outbound proxy: PROXY_URL env wins, else WARP if enabled (default on)."""
+    p = (os.environ.get("PROXY_URL") or "").strip()
+    if p:
+        return p
+    if os.environ.get("USE_WARP", "1").strip().lower() not in ("0", "false", "no", "off"):
+        return WARP_SOCKS
+    return ""
+
+
+def status_err(status: int) -> str:
+    """Human-friendly error for HTTP status codes."""
+    if status == 999:
+        return "Connection Fail"
+    if status == 400:
+        return "HTTP 400 (السيرفر رفض الطلب — غالباً IP محجوب، فعّل WARP أو غيّر البروكسي)"
+    if status in (401, 403):
+        return f"HTTP {status} (توكن غير صالح أو محظور)"
+    if status == 429:
+        return "HTTP 429 (Rate Limit — قلل التزامن)"
+    return f"HTTP {status}"
 
 # ── EVENT DEFINITIONS ────────────────────────────────────────
 EVENTS = {

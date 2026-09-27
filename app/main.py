@@ -12,6 +12,7 @@ from collections import deque
 from datetime import datetime
 
 import aiohttp
+from aiohttp_socks import ProxyConnector
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +20,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 from . import core
-from .core import EVENTS, build_payload, load_accounts_text, get_token, gacha_req, parse_gacha_response
+from .core import EVENTS, build_payload, load_accounts_text, get_token, gacha_req, parse_gacha_response, get_proxy_url, status_err
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(APP_DIR, "static")
@@ -66,16 +67,54 @@ class JobState:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
+            "proxy_mode": PROXY_MODE["mode"],
+            "proxy_detail": PROXY_MODE["detail"],
         }
 
 
 STATE = JobState()
 JOB_TASK: Optional[asyncio.Task] = None
+PROXY_MODE = {"mode": "direct", "detail": ""}
 
 
 def log(msg: str, level: str = "info"):
     ts = time.strftime("%H:%M:%S")
     STATE.logs.append({"t": ts, "msg": msg, "level": level})
+
+
+# ─────────────────────────────────────────────
+#  PROXY / WARP CONNECTOR (health-checked, with fallback)
+# ─────────────────────────────────────────────
+async def check_proxy(proxy_url: str, timeout: int = 10) -> dict:
+    """Test a socks5/http proxy by hitting Cloudflare trace endpoint."""
+    try:
+        connector = ProxyConnector.from_url(proxy_url, rdns=True)
+        async with aiohttp.ClientSession(connector=connector) as sess:
+            async with sess.get("https://www.cloudflare.com/cdn-cgi/trace",
+                                timeout=aiohttp.ClientTimeout(total=timeout)) as res:
+                text = await res.text()
+                data = dict(line.split("=", 1) for line in text.strip().splitlines() if "=" in line)
+                return {"ok": True, "warp": data.get("warp", "?"), "ip": data.get("ip", "?")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:120]}
+
+
+async def build_session_connector() -> tuple:
+    """Return (connector, mode_label) — falls back to direct if proxy unhealthy."""
+    proxy_url = get_proxy_url()
+    if proxy_url:
+        result = await check_proxy(proxy_url)
+        if result["ok"]:
+            PROXY_MODE["mode"] = "warp" if "127.0.0.1" in proxy_url else "proxy"
+            PROXY_MODE["detail"] = f"warp={result['warp']} ip={result['ip']}"
+            return ProxyConnector.from_url(proxy_url, rdns=True), proxy_url
+        PROXY_MODE["mode"] = "direct (fallback)"
+        PROXY_MODE["detail"] = f"proxy failed: {result.get('error', '?')}"
+        log(f"[!] Proxy {proxy_url} unhealthy ({result.get('error', '?')[:60]}) — falling back to DIRECT", "err")
+        return aiohttp.TCPConnector(), ""
+    PROXY_MODE["mode"] = "direct"
+    PROXY_MODE["detail"] = ""
+    return aiohttp.TCPConnector(), ""
 
 
 # ─────────────────────────────────────────────
@@ -172,8 +211,7 @@ async def process_account_single_event(sem, session, acc, idx, total, target_url
             except Exception as e:
                 log(f"   [!] Parse Error: {e}", "err")
         else:
-            err_msg = f"HTTP {status_code}" if status_code != 999 else "Connection Fail"
-            log(f"   [✗] {err_msg}", "err")
+            log(f"   [✗] {status_err(status_code)}", "err")
 
 
 async def process_account_all_events(sem, session, acc, idx, total, target_url,
@@ -213,8 +251,7 @@ async def process_account_all_events(sem, session, acc, idx, total, target_url,
                 except Exception as e:
                     log(f"   [!] Parse Error: {e}", "err")
             else:
-                err_msg = f"HTTP {status_code}" if status_code != 999 else "Connection Fail"
-                log(f"   [✗] {ev['name']}: {err_msg}", "err")
+                log(f"   [✗] {ev['name']}: {status_err(status_code)}", "err")
 
             await asyncio.sleep(0.3)
 
@@ -252,8 +289,7 @@ async def process_account_custom(sem, session, acc, idx, total, target_url,
             except Exception as e:
                 log(f"   [!] Parse Error: {e}", "err")
         else:
-            err_msg = f"HTTP {status_code}" if status_code != 999 else "Connection Fail"
-            log(f"   [✗] {err_msg}", "err")
+            log(f"   [✗] {status_err(status_code)}", "err")
 
 
 # ─────────────────────────────────────────────
@@ -287,6 +323,13 @@ async def run_job(accounts: list, cfg: dict):
         if event != "custom" and event != "all":
             log(f"    payload → {EVENTS[event]['payload']}", "dim")
 
+        # ── connector: WARP / proxy / direct (health-checked) ──
+        connector, active_proxy = await build_session_connector()
+        if active_proxy:
+            log(f"[🔗] Routing ALL requests via: {active_proxy} ({PROXY_MODE['detail']})", "ok")
+        else:
+            log("[🔗] Routing: DIRECT (no proxy) — قد يرفض السيرفر الطلبات إن كان IP محجوباً", "err")
+
         target_url = core.DEFAULT_URL
         log(f"[ SERVER ] BD / Mena → {target_url}", "info")
         log(f"[*] Accounts: {len(accounts)} | Concurrency: {concurrency} | Batch: {batch_size}", "info")
@@ -299,7 +342,7 @@ async def run_job(accounts: list, cfg: dict):
                    for i in range(0, len(accounts_to_process), batch_size)]
         total_batches = len(batches)
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=connector) as session:
             for batch_idx, batch in enumerate(batches):
                 if STATE.stop_flag:
                     log("[!] Stopped by user.", "err")
@@ -404,6 +447,20 @@ async def api_events():
         ],
         "server": core.DEFAULT_URL,
         "item_db": {str(k): {"name": v[0], "rarity": v[1]} for k, v in core.ITEM_DB.items()},
+    }
+
+
+@app.get("/api/proxy")
+async def api_proxy():
+    """Live check of outbound route (WARP / proxy / direct)."""
+    proxy_url = get_proxy_url()
+    if not proxy_url:
+        return {"configured": "direct", "mode": "direct", "detail": "USE_WARP=0 and no PROXY_URL"}
+    result = await check_proxy(proxy_url)
+    return {
+        "configured": proxy_url,
+        "mode": ("warp" if "127.0.0.1" in proxy_url else "proxy") if result["ok"] else "down (fallback→direct)",
+        **result,
     }
 
 

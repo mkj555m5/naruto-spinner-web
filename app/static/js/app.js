@@ -130,6 +130,38 @@ function renderHits(hits) {
   }
 }
 
+/* ─────────── Proxy status ─────────── */
+function renderProxy(mode) {
+  const badge = $('proxyBadge');
+  const label = $('proxyLabel');
+  if (!badge) return;
+  if (!mode) mode = '—';
+  const m = String(mode).toLowerCase();
+  if (m.includes('warp')) {
+    badge.textContent = '🔗 WARP ✓';
+    badge.className = 'badge badge-ok';
+  } else if (m.includes('proxy')) {
+    badge.textContent = '🔗 PROXY ✓';
+    badge.className = 'badge badge-ok';
+  } else if (m.includes('fallback')) {
+    badge.textContent = '🔗 DIRECT (WARP down!)';
+    badge.className = 'badge badge-err';
+  } else {
+    badge.textContent = '🔗 DIRECT';
+    badge.className = 'badge badge-gold';
+  }
+  if (label) label.textContent = '🔗 ' + mode;
+}
+
+async function checkProxy() {
+  try {
+    const res = await fetch('/api/proxy');
+    if (!res.ok) return;
+    const d = await res.json();
+    renderProxy(d.mode);
+  } catch (e) { /* silent */ }
+}
+
 /* ─────────── Polling ─────────── */
 function setProgress(done, total) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
@@ -159,6 +191,7 @@ async function pollState() {
     $('batchLabel').textContent = s.batch ? `Batch: ${s.batch}` : '—';
     $('eventLabel').textContent = 'الحدث: ' + (s.event || '—');
     $('tokenLabel').textContent = `Tokens: ${s.tokens_ready}`;
+    renderProxy(s.proxy_mode);
     setProgress(s.accounts_done, s.accounts_total);
 
     const running = s.running && !s.finished;
@@ -275,4 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   startPolling();
+  checkProxy();
+  setInterval(checkProxy, 30000);
 });

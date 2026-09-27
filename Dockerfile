@@ -19,7 +19,8 @@ RUN ARCH="$(dpkg --print-architecture)" \
  && tar -xzf /tmp/wireproxy.tar.gz -C /usr/local/bin wireproxy \
  && chmod +x /usr/local/bin/wireproxy \
  && rm -f /tmp/wireproxy.tar.gz \
- && wgcf --version && wireproxy --version
+ && wgcf -h > /dev/null \
+ && wireproxy -v
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
